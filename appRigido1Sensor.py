@@ -11,10 +11,8 @@ from PyQt5.QtCore import *
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
-import socket
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import sys, struct
 import binascii
 import threading
@@ -24,7 +22,8 @@ from pylab import *
 import time
 import sqlite3
 import ast
-#import recvPlataforma1
+import recvPlataforma1
+
 ion()
 
 maxint = 2 ** (struct.Struct('i').size * 8 - 1) - 1
@@ -39,22 +38,18 @@ class Ui_MainWindow(object):
         ax.set_axis_off()
         self.fig.add_axes(ax)
         self.fig.canvas.draw()
-        #self.fig.canvas.toolbar.pack_forget()
-        #plt.show(block=False)
-        self.vectorDatosDistribucionPresion = []
+
         self.vectorDesencriptado = []
-        self.iniciaTramaDeDatos = False
+
         self.columnas = 48;
         self.filas = 48;
+
         axis = plt.gca()
         axis.get_xaxis().set_visible(False)
         axis.get_yaxis().set_visible(False)
         matriz = [[0 for x in range(self.columnas)] for x in range(self.filas)] 
         matriz[0][0] = 255
-        matrizSensor2 = [[0 for x in range(self.columnas)] for x in range(self.filas)] 
-        #matrizSensor2[0][0] = 255
-        matrizCompleta = np.concatenate((matriz,matrizSensor2),axis=1)
-        matrizCompleta[0][0] = 255
+
         plt.set_cmap('jet')
         ax = plt.gca()
 
@@ -64,28 +59,20 @@ class Ui_MainWindow(object):
         self.cbar = self.fig.colorbar(ax.imshow(matriz), ticks=[5,125,250],cax=cax)
         self.cbar.ax.set_yticklabels(['Baja','Medio','Alto'])
         self.cbar.ax.tick_params(labelcolor='w', labelsize=12)
-        #divider = make_axes_locatable(plt.gca())
-        #cax = divider.append_axes("right","5%",pad="3%")
-        #plt.colorbar(plt.imshow(matrizCompleta),cax=cax)
         
         self.initData = scipy.ndimage.zoom(matriz, 3)
         #self.contour = plt.contour(data)
         
         self.imagen = ax.imshow(self.initData, interpolation = 'nearest')
-        self.contador = 0
-        self.contour_axis = plt.gca()
+
         self.sensorConectado = False
-        self.defaultNumberOfPlatforms = 1
-        self.numberOfPlatforms = 2
+
         self.intensityAdjustment = 240
 
         self.contadorImagenes = 0
-        #self.instanciaSerial = recvPlataforma1.Ui_MainWindow()
-        #self.t = threading.Thread(target=self.instanciaSerial.conectarSensor)
-        #self.t.IsBackground = True;
-        #self.threadStarted = False
-        
-        #plt.gca().invert_yaxis()
+
+        self.puerto = '/dev/tty.usbmodem1411'
+        self.plataformaID = '1'
             
     def sqlDataBase(self):
         
@@ -347,11 +334,9 @@ class Ui_MainWindow(object):
         #for row in self.c.execute("SELECT * FROM sensorRigido WHERE `id`='1'"):
         for row in self.c.execute("SELECT * FROM sensorRigido WHERE 1"):
           if row[0] == '1':
-              datosSensor2 = row[1]
-          if row[0] == '2':
-              datosSensor1 = row[1]
+              datosSensor = row[1]
 
-        matrizSensor2 = ast.literal_eval(datosSensor2)
+        matrizSensor2 = ast.literal_eval(datosSensor)
 
         self.contadorImagenes = self.contadorImagenes + 1
         hora = time.strftime("%H:%M:%S")
@@ -366,22 +351,9 @@ class Ui_MainWindow(object):
         matriz2espejo = matriz2espejo[::-1,:]
         matriz2espejo = matriz2espejo.tolist()
 
-        matrizCompleta = np.concatenate((matriz2espejo, matriz2espejo), axis=1)
-        for i in range(48):
-            for j in range(48):
-                matrizCompleta[i][j] = matrizCompleta[i][j]*10
-                if matrizCompleta[i][j] > 200:
-                    matrizCompleta[i][j] = self.intensityAdjustment
+        dataDatosCompletos = scipy.ndimage.zoom(matriz2espejo, 5)
+        self.imagen.set_data(dataDatosCompletos)
 
-        if self.numberOfPlatforms == 1:
-            data = scipy.ndimage.zoom(matriz2espejo, 5)
-            self.imagen.set_data(data)
-        elif self.numberOfPlatforms == 2:
-            dataDatosCompletos = scipy.ndimage.zoom(matriz2espejo, 5)
-            self.imagen.set_data(dataDatosCompletos)
-        elif self.numberOfPlatforms == 3:
-            dataDatosCompletos = scipy.ndimage.zoom(matriz2espejo, 5)
-            self.imagen.set_data(dataDatosCompletos)
 
         #plt.savefig('/Users/FING156561/Desktop/figuraRigido.png', dpi=10)
       
@@ -392,28 +364,27 @@ class Ui_MainWindow(object):
             self.sqlDataBase()
 
             try:
-                
-                #self.c.execute("UPDATE `sensorRigido` SET `connectionStatus` = '%s' WHERE `id`='1'" % 'True')
-                #self.c.execute("UPDATE `sensorRigido` SET `connectionStatus` = '%s' WHERE `id`='2'" % 'True')
 
                 self.pushButton.setStyleSheet("background-color: green; border-style: outset; border-width: 1px; border-radius: 10px; border-color: beige; padding: 6px;")
 
                 self.pushButton.setStyleSheet("background-color: green; border-style: outset; border-width: 1px; border-radius: 10px; border-color: beige; padding: 6px;")
 
                 self.pushButton_2.setText("Desconectar sensor")
+
+                # Hilo para visualizar distribucion de presion sensor 1
+                self.t = threading.Thread(target = recvPlataforma1.Ui_MainWindow, args=(self.puerto, self.plataformaID,))
+                self.t.IsBackground = True;
+                self.t.start()
+
             except:
                 pass
             print("Sensor conectado")
             self.conn.commit()
 
             self.msg.exec_()
-            #if (self.threadStarted == False):
-                #self.threadStarted = True
-                #self.t.start()
+
         else:
             try:
-                #self.c.execute("UPDATE `sensorRigido` SET `connectionStatus` = '%s' WHERE `id`='1'" % 'False')
-                #self.c.execute("UPDATE `sensorRigido` SET `connectionStatus` = '%s' WHERE `id`='2'" % 'False')
 
                 self.sensorConectado = False
                 self.pushButton.setStyleSheet("background-color: red; border-style: outset; border-width: 1px; border-radius: 10px; border-color: beige; padding: 6px;")
@@ -421,13 +392,11 @@ class Ui_MainWindow(object):
             except:
                 pass    
             self.conn.commit()
-            self.instanciaSerial.stopCommunicacion()
             print("sensor desconectado")
         
         threading.Timer(0.01, self.recibeDatos).start()              
 
 if __name__ == "__main__":
-    import sys
     app = QtWidgets.QApplication(sys.argv)
     app.setStyleSheet('QMainWindow{background-color: #222222; border:2px solid black;}')
     MainWindow = QtWidgets.QMainWindow()

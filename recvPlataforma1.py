@@ -8,28 +8,23 @@
 
 
 import serial
-import sys
 import binascii
-import threading
 import numpy as np
-import socket
 import scipy.ndimage
 import sys, struct
-#from pylab import *
 import time
 import sqlite3
 #ion()
 
-
-puerto = sys.argv[1]
-plataformaID = sys.argv[2]
-print("puerto",puerto)
 maxint = 2 ** (struct.Struct('i').size * 8 - 1) - 1
 sys.setrecursionlimit(maxint)
 
 class Ui_MainWindow(object):
-    def __init__(self):
+    def __init__(self, puerto, plataformaID):
         print("init")
+        self.puerto = puerto
+        self.plataformaID = plataformaID
+
         self.vectorDatosDistribucionPresion = []
         self.vectorDesencriptado = []
         self.iniciaTramaDeDatos = False
@@ -39,10 +34,11 @@ class Ui_MainWindow(object):
         matriz[0][0] = 255
         self.sensorConnectionStatus = False
         self.connectionRequest = False
+        self.conectarSensor()
         
     def socketConnection(self):
         
-        self.s = serial.Serial(puerto)
+        self.s = serial.Serial(self.puerto)
         self.s.timeout = 0.2
         self.s.bauderate = 115200
         #Sensor 2
@@ -61,14 +57,14 @@ class Ui_MainWindow(object):
         self.c.execute('''CREATE TABLE IF NOT EXISTS sensorRigido
                      (id text, data real, connectionStatus text)''')
         # Insert a row of data
-        for row in self.c.execute("SELECT * FROM sensorRigido WHERE '%s'" % plataformaID):
-            if row[0] == plataformaID:
+        for row in self.c.execute("SELECT * FROM sensorRigido WHERE '%s'" % self.plataformaID):
+            if row[0] == self.plataformaID:
                 self.campoSensor1Creado = True
 
         if self.campoSensor1Creado == False:
             self.campoSensor1Creado = True
-            self.c.execute("INSERT INTO sensorRigido VALUES ('%s','initValue sensor 1','True')" % plataformaID)
-        self.c.execute("UPDATE `sensorRigido` SET `connectionStatus` = '%s' WHERE `id`='%s'" % ('True',plataformaID))
+            self.c.execute("INSERT INTO sensorRigido VALUES ('%s','initValue sensor 1','True')" % self.plataformaID)
+        self.c.execute("UPDATE `sensorRigido` SET `connectionStatus` = '%s' WHERE `id`='%s'" % ('True', self.plataformaID))
         self.conn.commit()
         
     def desencriptarVector(self,vector):
@@ -106,7 +102,7 @@ class Ui_MainWindow(object):
     def recibeDatos(self):
 
         while True:
-            for row in self.c.execute("SELECT * FROM sensorRigido WHERE `id`='%s'" % plataformaID):
+            for row in self.c.execute("SELECT * FROM sensorRigido WHERE `id`='%s'" % self.plataformaID):
                 if row[2] == 'True':
                     self.connectionRequest = True
                 else:
@@ -118,8 +114,7 @@ class Ui_MainWindow(object):
             
             if self.sensorConnectionStatus == True:                
                 buf = self.readline(self.s, b'\r\n')
-                #buf = self.s.readline()
-                print(buf)
+
                 if len(buf) > 5:
                     
                     info = [buf[i:i+1] for i in range(0, len(buf), 1)]
@@ -180,7 +175,7 @@ class Ui_MainWindow(object):
       
       for i in range(self.filas):
         for j in range(self.columnas):
-            matrizDistribucion[i][j] = matrizDistribucion[i][j]*3
+            matrizDistribucion[i][j] = matrizDistribucion[i][j]*1
 
             if matrizDistribucion[i][j] > 200:
                 #matrizDistribucion[i][j] = 240
@@ -192,7 +187,7 @@ class Ui_MainWindow(object):
       data = scipy.ndimage.zoom(matrizDistribucion, 1)
       #print("inserta datos base de datos")
       #self.c.execute("UPDATE `sensorRigido` SET `data`= '%s', `connectionStatus` = '%s' WHERE `id`='1'" % (matrizDistribucion,'True'))
-      self.c.execute("UPDATE `sensorRigido` SET `data`= '%s' WHERE `id`='%s'" % (matrizDistribucion, plataformaID))
+      self.c.execute("UPDATE `sensorRigido` SET `data`= '%s' WHERE `id`='%s'" % (matrizDistribucion, self.plataformaID))
       self.conn.commit()
 
     def conectarSensor(self):
@@ -200,7 +195,6 @@ class Ui_MainWindow(object):
             self.sensorConnectionStatus = True
             self.socketConnection()
             self.recibeDatos()
-            #threading.Timer(0.01, self.recibeDatos()).start()
             print("conecta conecta")
         #except:
             #print("No conecta")
@@ -214,7 +208,6 @@ class Ui_MainWindow(object):
         #self.sensorConnectionStatus = True
 
 if __name__ == "__main__":
-    import sys
     ui = Ui_MainWindow()
     ui.conectarSensor()
     #ui.recibeDatos()
